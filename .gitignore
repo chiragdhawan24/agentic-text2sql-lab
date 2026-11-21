@@ -1,0 +1,14 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+
+# Secrets
+.env
+
+# Generated databases
+data/
+
+# Test and OS artifacts
+.pytest_cache/
+.DS_Store
