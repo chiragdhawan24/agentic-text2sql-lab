@@ -2,6 +2,7 @@ import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
+from contextlib import closing
 
 from app import initialize_db, total_revenue
 
@@ -15,12 +16,13 @@ class DatabaseTests(unittest.TestCase):
         initialize_db(self.db_path)
 
     def test_expected_tables_exist(self):
-        with sqlite3.connect(self.db_path) as connection:
-            tables = {
-                row[0] for row in connection.execute(
-                    "SELECT name FROM sqlite_master WHERE type = 'table'"
-                )
-            }
+        with closing(sqlite3.connect(self.db_path)) as connection:
+            with connection:
+                tables = {
+                    row[0] for row in connection.execute(
+                        "SELECT name FROM sqlite_master WHERE type = 'table'"
+                    )
+                }
 
         self.assertEqual(
             tables,
@@ -35,10 +37,11 @@ class DatabaseTests(unittest.TestCase):
     def test_setup_is_repeatable(self):
         initialize_db(self.db_path)
 
-        with sqlite3.connect(self.db_path) as connection:
-            count = connection.execute(
-                "SELECT COUNT(*) FROM order_items"
-            ).fetchone()[0]
+        with closing(sqlite3.connect(self.db_path)) as connection:
+            with connection:
+                count = connection.execute(
+                    "SELECT COUNT(*) FROM order_items"
+                ).fetchone()[0]
 
         self.assertEqual(count, 3)
 

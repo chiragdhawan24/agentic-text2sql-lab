@@ -1,5 +1,7 @@
 from pathlib import Path
 import sqlite3
+from contextlib import closing
+
 
 DB_PATH = Path("data/shop.db")
 
@@ -7,7 +9,7 @@ DB_PATH = Path("data/shop.db")
 def initialize_db(db_path: Path = DB_PATH) -> None:
     db_path.parent.mkdir(parents=True, exist_ok=True)
 
-    with sqlite3.connect(db_path) as connection:
+    with closing(sqlite3.connect(db_path)) as connection:
         connection.execute("PRAGMA foreign_keys = ON")
         connection.executescript("""
             CREATE TABLE IF NOT EXISTS customers (
@@ -50,10 +52,12 @@ def initialize_db(db_path: Path = DB_PATH) -> None:
 
 
 def total_revenue(db_path: Path = DB_PATH) -> float:
-    with sqlite3.connect(db_path) as connection:
-        result = connection.execute(
-            "SELECT COALESCE(SUM(quantity * unit_price), 0) FROM order_items"
-        ).fetchone()
+    with closing(sqlite3.connect(db_path)) as connection:
+        with connection:
+            # Database operations
+            result = connection.execute(
+                "SELECT COALESCE(SUM(quantity * unit_price), 0) FROM order_items"
+            ).fetchone()
 
     return float(result[0])
 
