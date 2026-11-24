@@ -28,14 +28,16 @@ class SqlGeneration(BaseModel):
 def generate_structured_sql(
     question: str,
     db_path: Path = DB_PATH,
-    client=None
+    client=None,
+    schema: dict | None = None
 ) -> SqlGeneration:
 
     if not question.strip():
         raise ValueError("Question cannot be empty")
 
-    # Retrieve the real database schema
-    schema = inspect_database_schema(db_path)
+    # Retrieve the real database schema if it is not provided
+    if schema is None:
+        schema = inspect_database_schema(db_path)
 
     load_dotenv()
 
