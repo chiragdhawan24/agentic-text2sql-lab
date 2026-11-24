@@ -93,6 +93,79 @@ class AgentGraphTests(unittest.TestCase):
 
             mock_generator.assert_not_called()
 
+    def test_repairs_invalid_sql(self):
+        responses = [
+            SqlGeneration(
+                sql="SELECT fake_column FROM customers",
+                explanation="Initial incorrect query.",
+            ),
+            SqlGeneration(
+                sql="SELECT name FROM customers ORDER BY name",
+                explanation="Corrected customer query.",
+            ),
+        ]
 
+        with patch(
+            "agent_graph.generate_structured_sql",
+            side_effect=responses,
+        ) as mock_generator:
+            state = build_graph().invoke({
+                "question": "List customers",
+                "db_path": self.db_path,
+            })
+
+        self.assertEqual(state["attempts"], 2)
+        self.assertIsNone(state["error"])
+        self.assertEqual(
+            state["result"]["rows"],
+            [["Ava"], ["Noah"]],
+        )
+        self.assertEqual(mock_generator.call_count, 2)
+
+        # Confirm the error was passed back to the LLM.
+        repair_prompt = mock_generator.call_args_list[1].kwargs[
+            "question"
+        ]
+
+        self.assertIn("fake_column", repair_prompt)
+        self.assertIn("no such column", repair_prompt)
+
+    def test_stops_after_max_attempts(self):
+        generated = SqlGeneration(
+            sql="SELECT fake_column FROM customers",
+            explanation="Invalid query.",
+        )
+
+        with patch(
+            "agent_graph.generate_structured_sql",
+            return_value=generated,
+        ) as mock_generator:
+            state = build_graph().invoke({
+                "question": "List customers",
+                "db_path": self.db_path,
+            })
+
+        self.assertEqual(state["attempts"], 3)
+        self.assertEqual(mock_generator.call_count, 3)
+        self.assertIsNone(state["result"])
+        self.assertIn("no such column", state["error"])
+
+    def test_authorization_errors_are_not_retried(self):
+        generated = SqlGeneration(
+            sql="SELECT load_extension('example')",
+            explanation="Disallowed operation.",
+        )
+
+        with patch(
+            "agent_graph.generate_structured_sql",
+            return_value=generated,
+        ) as mock_generator:
+            with self.assertRaises(sqlite3.DatabaseError):
+                build_graph().invoke({
+                    "question": "Load extension",
+                    "db_path": self.db_path,
+                })
+
+        self.assertEqual(mock_generator.call_count, 1)
 if __name__ == "__main__":
     unittest.main()
